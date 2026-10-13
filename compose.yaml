@@ -1,0 +1,79 @@
+services:
+  postgres:
+    image: postgres:16
+    env_file:
+      - .env.postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api-main:
+    build:
+      context: ./shop_api
+    env_file:
+      - .env.main
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api-read1:
+    build:
+      context: ./shop_api
+    env_file:
+      - .env.readonly
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api-read2:
+    build:
+      context: ./shop_api
+    env_file:
+      - .env.readonly
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:latest
+    depends_on:
+      - api-main
+      - api-read1
+      - api-read2
+      - pgadmin
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./static:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/shop.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+
+  pgadmin:
+    image: dpage/pgadmin4
+    env_file:
+      - .env.pgadmin
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+  auth:
+    build:
+      context: ./auth_service
+    env_file:
+      - .env.auth
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+
+volumes:
+  postgres_data:
+  pgadmin_data:
